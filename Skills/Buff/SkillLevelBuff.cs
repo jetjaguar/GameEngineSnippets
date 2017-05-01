@@ -13,14 +13,16 @@ public class SkillLevelBuff : Buff
 
     public override void ApplyBuff(float amount)
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        skillLevelBuffDiff = actor.SetSkillLevelMultiplier((actor.GetSkillLevelMultiplier() - skillLevelBuffDiff) + amount);        
+        BattleNPC actor = Controller.BuffActor;
+        float oldSKL = actor.SkillLevelMultiplier;
+        actor.SkillLevelMultiplier = (actor.SkillLevelMultiplier - skillLevelBuffDiff) + amount;
+        skillLevelBuffDiff = oldSKL - actor.SkillLevelMultiplier;
     }
 
     public override void DeApplyBuff()
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        actor.SetSkillLevelMultiplier(actor.GetSkillLevelMultiplier() - skillLevelBuffDiff);
+        BattleNPC actor = Controller.BuffActor;
+        actor.SkillLevelMultiplier = actor.SkillLevelMultiplier - skillLevelBuffDiff;
     }
 
 #if UNITY_EDITOR

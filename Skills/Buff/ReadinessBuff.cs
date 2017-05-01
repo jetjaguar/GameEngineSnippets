@@ -6,7 +6,7 @@ public class ReadinessBuff : Buff
 {
     public override void ApplyBuff(float amount)
     {
-        GetBuffController().GetBuffActor().AddReadiness(amount);        
+        Controller.BuffActor.CurrentCooldown += amount;        
     }
 
     public override void DeApplyBuff()

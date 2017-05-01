@@ -13,14 +13,16 @@ public class SkillDropBuff : Buff
 
     public override void ApplyBuff(float amount)
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        skillDropBuffDiff = actor.SetSkillDropMultiplier((actor.GetSkillDropMultiplier() - skillDropBuffDiff) + amount);        
+        BattleNPC actor = Controller.BuffActor;
+        float oldSKD = actor.SkillDropMultiplier;
+        actor.SkillDropMultiplier = (actor.SkillDropMultiplier - skillDropBuffDiff) + amount;
+        skillDropBuffDiff = oldSKD - actor.SkillDropMultiplier;
     }
 
     public override void DeApplyBuff()
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        actor.SetSkillDropMultiplier(actor.GetSkillDropMultiplier() - skillDropBuffDiff);
+        BattleNPC actor = Controller.BuffActor;
+        actor.SkillDropMultiplier = actor.SkillDropMultiplier - skillDropBuffDiff;
     }
 
 #if UNITY_EDITOR

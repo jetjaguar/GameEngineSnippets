@@ -17,24 +17,31 @@ public class MeleeSkill : Skill {
     // Direction we should be facing when moving, used for non-homing skills
     private Vector3 skillDirection;
 
+    void Awake()
+    {
+        SkillAwake();
+    }
+
     /*
      * Take care of sprites/rotation before we start moving
      */
     public override void StartSkill()
     {
-        GetSkillOwner().SetNPCAnimatorTrigger(BattleGlobals.ANIMATE_NPC_ATTACK);
+        BattleNPC b = SkillOwner;
 
-        if (GetSkillOwner().CompareTag(BattleGlobals.TAG_FOR_ENEMIES))
+        b.NPCAnimator.SetTrigger(BattleGlobals.ANIMATE_NPC_ATTACK);
+
+        if (b.CompareTag(BattleGlobals.TAG_FOR_ENEMIES))
         {
             ToggleSpriteFlipX();
         }
-
+        
         // 'Aim' our rigidbody before we start moving
-        if (!IsHoming())
+        if (!Homing)
         {
-            GetSkillOwner().GetNPCRigidBody2D().transform.rotation = BattleGlobals.LookAt(GetSkillOwner().transform.parent.gameObject, 
-                GameGlobals.GetBattleNPC(GetMyTargets()[MELEE_SKILL_PRIMARY_TARGET]).GetAimTarget());
-            skillDirection = (GetSkillOwner().CompareTag(BattleGlobals.TAG_FOR_HEROES)) ? Vector2.left : Vector2.right;
+            b.NPCRigidBody2D.transform.rotation = BattleGlobals.LookAt(b.transform.parent.gameObject, 
+               SkillNPCTargets[MELEE_SKILL_PRIMARY_TARGET].GetAimTarget(), b.tag);
+            skillDirection = (BattleGlobals.IsHeroTeamTag(b.tag)) ? Vector2.left : Vector2.right;            
         }        
     }
     
@@ -43,21 +50,20 @@ public class MeleeSkill : Skill {
      */
     public override void DoSkill()
     {
-        if (IsHoming())
+        if (Homing)
         {
-           HomingMovement(GetSkillOwner().GetNPCRigidBody2D(), 
-                                        GetMyTargets()[MELEE_SKILL_PRIMARY_TARGET].transform.position,
-                                        (1 / GetSkillOwner().GetMoveSpeed()));
+            HomingMovement(SkillOwner.NPCRigidBody2D, 
+                                        SkillNPCTargets[MELEE_SKILL_PRIMARY_TARGET].transform.position,
+                                        (1 / SkillOwner.NPCMoveSpeed));
         }
         else
         {
-            NonHomingMovement(GetSkillOwner().GetNPCRigidBody2D(), skillDirection * (RAY_SPEED_X * GetSkillOwner().GetMoveSpeed()));
+            NonHomingMovement(SkillOwner.NPCRigidBody2D, skillDirection * (RAY_SPEED_X * SkillOwner.NPCMoveSpeed));
             
             // If we are out of sight, count as a miss
-            if (!GetSkillOwner().IsNPCSpriteVisible())
+            if (!SkillOwner.NPCSpriteRender.isVisible)
             {
-                OnDeath();
-                OnSkillHit(null);
+                OnSkillHit(null);                                
             }
         }              
     }
@@ -66,14 +72,13 @@ public class MeleeSkill : Skill {
      * Take care of logic for 'returning' to start position and detect missing target
      * @param: col -- the GameObject we hit, if col == null, we missed
      */
-    public override void OnSkillHit(GameObject col)
+    public override void OnSkillHit(BattleNPC col)
     {
         // Hit *a* target
         if (col != null)
         {
-            BattleNPC targetNPC = GameGlobals.GetBattleNPC(col);
-            int damage = targetNPC.TakeDamage(this);
-            SetSkillHitStatus(damage, targetNPC.IsAlive());
+            int damage = col.TakeDamage(this);
+            SetSkillHitStatus(damage, col.IsAlive());
             ApplyOnHitBuffs(col, damage);           
         }
         else // Missed Target
@@ -81,8 +86,8 @@ public class MeleeSkill : Skill {
             SetSkillHitStatus(0, true);
         }
         AdvanceSkillState();
-        GetSkillOwner().FlipBattleNPCSpriteX();
-        ToggleSpriteRender();
+        SkillOwner.FlipBattleNPCSpriteX();
+        SkillSpriteRenderer.enabled = false;
     }
 
     /*
@@ -90,20 +95,20 @@ public class MeleeSkill : Skill {
      */
     public override void DoCooldown()
     {
-        Rigidbody2D parentRigid = GetSkillOwner().GetNPCRigidBody2D();
-        Vector3 start_pos       = GetSkillOwner().GetAimTarget();
+        Rigidbody2D parentRigid = SkillOwner.NPCRigidBody2D;
+        Vector3 start_pos       = SkillOwner.GetAimTarget();
         
         // Whenever we're roughly where we started
         if (Mathf.Abs(parentRigid.transform.position.sqrMagnitude - start_pos.sqrMagnitude) < Skill.v3_equals_sensitivity)
         {
-            GetSkillOwner().ResetRotation();
+            SkillOwner.ResetRotation();
             AdvanceSkillState();
-            StartCoroutine(GetSkillOwner().SkillWait(this));
-            GetSkillOwner().FlipBattleNPCSpriteX();
+            SkillOwner.StartSkillCooldown(this);
+            SkillOwner.FlipBattleNPCSpriteX();
         }
         else
         {
-            HomingMovement(parentRigid, start_pos, (1 / GetSkillOwner().GetMoveSpeed()));
+            HomingMovement(parentRigid, start_pos, (1 / SkillOwner.NPCMoveSpeed));
         }
     }
 
@@ -113,22 +118,35 @@ public class MeleeSkill : Skill {
      */
     public override void OnTriggerEnter2D(Collider2D collision)
     {
-        if (!IsBlockable())
+        if (SkillState == Skill_State.DoSkill)
         {
-            GameObject myTarget = GetMyTargets()[MELEE_SKILL_PRIMARY_TARGET];
-            if ((myTarget != null) && collision.transform.gameObject.Equals(myTarget.gameObject))
+            BattleNPC colNPC = GameGlobals.GetBattleNPC(collision.gameObject);
+            if (colNPC != null)
             {
-                OnSkillHit(myTarget);
+                if (!Blockable)
+                {
+                    BattleNPC myTarget = SkillNPCTargets[MELEE_SKILL_PRIMARY_TARGET];
+                    if ((myTarget != null) && (myTarget == colNPC))
+                    {
+                        OnSkillHit(colNPC);
+                    }
+                }
+                else
+                {
+                    if (colNPC.IsAlive() && BattleGlobals.IsHostileToTag(SkillOwner.tag, colNPC.tag))
+                    {
+                        OnSkillHit(colNPC);
+                    }
+                }
             }
         }
-        else
-        {
-            if (collision.gameObject.tag.Equals(BattleGlobals.GetHostileTag(GetSkillOwner().tag)) &&
-                GameGlobals.GetBattleNPC(collision.gameObject).IsAlive())
-            {
-                OnSkillHit(collision.gameObject);
-            }
-        }
+    }
+
+    public override void OnDeath()
+    {
+        SkillOwner.NPCRigidBody2D.velocity = Vector3.zero;
+        SkillOwner.ResetRotation();
+        Awake();
     }
 
     /*

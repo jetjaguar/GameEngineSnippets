@@ -11,23 +11,22 @@ public abstract class Skill : MonoBehaviour
 {
     public const float MINIMUM_SKILL_DROP_CHANCE    = 0.0f;    // Minimum chance skill drops on creature death
     public const float MAXIMUM_SKILL_DROP_CHANCE    = 100.0f;  // Maximum chance skill drops on creature death
-    public const float MINIMUM_SKILL_READINESS      = 0.5f;    // Minimum readiness of skills
-    public const float MAXIMUM_SKILL_READINESS      = 10.0f;   // Maximum readiness of skills
+    public const float MINIMUM_SKILL_COOLDOWN       = 0.5f;    // Minimum readiness of skills
+    public const float MAXIMUM_SKILL_COOLDOWN       = 10.0f;   // Maximum readiness of skills
     public const int MINIMUM_SKILL_HITS             = 1;       // Minimum number of hits skill can do
     public const int MAXIMUM_SKILL_HITS             = 5;       // Maximum number of hits skill can do
     public const float MINIMUM_DOT_INCREMENT        = 0.1f;    // Minimum delta time to increase skill damage
     public const float MAXIMUM_DOT_INCREMENT        = 1.0f;    // Maximum delta time to increase skill damage
-    public const int SKILL_MIN_LEVEL                = 0;       // Skill minimum level (Skill editor)
-    public const int SKILL_MAX_LEVEL                = 10;      // Skill maximum level (Skill editor)
+    public const int MINIMUM_SKILL_LEVEL            = 0;       // Skill minimum level (Skill editor)
+    public const int MAXIMUM_SKILL_LEVEL            = 10;      // Skill maximum level (Skill editor)
     public const float v3_equals_sensitivity        = 0.0001f; // Used to determine if melee skills are done (Vector3 MoveTowards is imprecise)
     public const float CRIT_MULTI                   = 2.0f;    // Critical hit damage multiplier
-    private const int MAXIMUM_ELEMENTAL_SKILL_TYPES = 2;       // Number of types a skill can have
-
+    public const int MAXIMUM_ELEMENTAL_SKILL_TYPES  = 2;       // Number of types a skill can have
+    
     // Communicates what part of the skill to communicate in Skill_Update
     public enum Skill_State
     {
         SkillStart,            // Set up all the rigging for the skill
-        ChargingAttack,        // Largely just an intermediate step
         DoSkill,               // Main body of the skill, transitions into next state via collision (usually)
         Cooldown,              // Clean up (return to starting position for Melee), start wait timers
         SkillComplete,         // Skill is done
@@ -44,26 +43,33 @@ public abstract class Skill : MonoBehaviour
         Dead,                   // Skill hit target that was already dead (not a miss)
     }
 
+    //
+    public enum Skill_Target_Type
+    {
+        AlliedTargets,
+        EnemyTargets,
+        AnyTarget,        
+        SelfTarget
+    }
+
     /*
      *  Variables configurable by means of Unity Editor
      */
     [SerializeField] private int skillBasePower;                        // Damage a single attack does
     [SerializeField] private int numberHits;                            // Number of individual attacks
+    [SerializeField] private Skill_Target_Type targetType;              // Type of targets this skill targets
     [SerializeField] private bool chargeable;                           // Increase power while in-flight
     [SerializeField] private float chargeIncrementTime;                 // Delta time where power increases
     [SerializeField] private int chargePowerGain;                       // Power Amount that the move increases 
-    [SerializeField] private float skillReadiness;                      // Time in seconds until next attack may be used
+    [SerializeField] private float skillCooldown;                       // Time in seconds until next attack may be used after this attack
     [SerializeField] private bool blockable;                            // Determines if the skill can be intercepted by another hostile NPC
     [SerializeField] private bool homing;                               // Determines if the skill uses the movement logic to follow a moving NPC
-    [SerializeField] private bool targetsAllies;                        // Determines if the skill targets allies primarily
-    [SerializeField] private bool channelable;                          // Determines if the skill has an additional cast time
-    [SerializeField] private float channelTime;                         // Channel time (in seconds) of skill, only used if channelable == true
+    [SerializeField] private int caretakerManaCost;                     // Mana cost of the skill when Caretaker chooses to use it
     [SerializeField] private int skillMaxLevel;                         // Maximum level of the skill
     [SerializeField] private float skillDropChance;                     // Chance that the skill is dropped when an enemy is killed and has this skill
     // Elemental damage type(s)
     [SerializeField] private Battle_Element_Type[] damageTypes = new Battle_Element_Type[MAXIMUM_ELEMENTAL_SKILL_TYPES];
-
-
+    
     /*
      * Variables related to leveling up the skill
      */
@@ -71,30 +77,173 @@ public abstract class Skill : MonoBehaviour
     private int skillExp;                                               // Current Experience gained of the skill (out of skilExptoLevel)
     private int skillExptoLevel;                                        // Amount of Experience required until next level of the skill
 
-    /*
-     * Variables related to executing the AI Loop
-     */
-    private Skill_State myState;                                        // Current state of the skill
-    private Skill_Hit_Status myHitStatus;                               // State of how the skill performed
-    private BattleNPC skillOwner;                                       // BattleNPC that is using this skill
-    private List<GameObject> myTargets;                                 // GameObject Target(s) for this skill
-    private BattleNPC[] myNPCTargets;                                   // BattleNPC Target(s) for this skill
-    private SpriteRenderer mySpriteRenderer;                            // Icon that appears on NPC (different from projectile)
+    // Properties of Inspector fields
+    public int NumberOfHits
+    {
+        get
+        {
+            return numberHits;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            numberHits = Convert.ToInt32(GameGlobals.SnapToMinOrMax(value, MINIMUM_SKILL_HITS, MAXIMUM_SKILL_HITS));
+        }
+#endif
+    }
+    public Skill_Target_Type TargetType
+    {
+        get
+        {
+            return targetType;
+        }
+
+    }
+    public bool Chargeable
+    {
+        get
+        {
+            return chargeable;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            chargeable = value;
+        }
+#endif
+    }
+    public float ChargeIncrementTime
+    {
+        get
+        {
+            return chargeIncrementTime;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            chargeIncrementTime = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointOne(value), MINIMUM_DOT_INCREMENT, MAXIMUM_DOT_INCREMENT);
+        }
+#endif
+    }
+    public int ChargePowerGain
+    {
+        get
+        {
+            return chargePowerGain;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            chargePowerGain = value;
+        }
+#endif
+    }
+    public float SkillCooldown
+    {
+        get
+        {
+            return skillCooldown;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            skillCooldown = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointFive(value), MINIMUM_SKILL_COOLDOWN, MAXIMUM_SKILL_COOLDOWN);
+        }
+#endif
+    }
+    public bool Blockable
+    {
+        get
+        {
+            return (SkillState == Skill_State.DoSkill) ? blockable : false;
+        }
+        set
+        {
+            blockable = value;
+        }
+    }
+    public bool Homing
+    {
+        get
+        {
+            return homing;
+        }
+        set
+        {
+            homing = value;
+        }
+    }
+    public int CaretakerManaCost
+    {
+        get
+        {
+            return caretakerManaCost;
+        }
+        set
+        {
+            caretakerManaCost = value;
+        }
+    }
+    public int SkillMaxLevel
+    {
+        get
+        {
+            return skillMaxLevel;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            skillMaxLevel = Convert.ToInt32(GameGlobals.SnapToMinOrMax(value, MINIMUM_SKILL_LEVEL, MAXIMUM_SKILL_LEVEL));
+        }
+#endif
+    }
+    public float SkillDropChance
+    {
+        get
+        {
+            return skillDropChance;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            skillDropChance = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointOne(value), MINIMUM_SKILL_DROP_CHANCE, MAXIMUM_SKILL_DROP_CHANCE);
+        }
+#endif
+    }    
+    public Battle_Element_Type[] SkillElementTypes
+    {
+        get
+        {
+            return damageTypes;
+        }
+    }
+    
+    // Properties for variables accessed by other classes
+    public Skill_State SkillState { get; private set; }            // Current state of the skill
+    public Skill_Hit_Status HitStatus { get; private set; }        // State of how the skill performed
+    public BattleNPC SkillOwner { get; private set; }              // BattleNPC that is using this skill
+    public BattleNPC[] SkillNPCTargets { get; private set; }      // BattleNPC Target(s) for this skill
+    public SpriteRenderer SkillSpriteRenderer { get; private set; }  // Icon that appears on NPC (different from projectile)
+
+    // Variables not accessible outside of classd
     private GameObject[] buffChildren;                                  // Child Game Objects of the Skill that have buffs attached
     private List<BuffController> onCastControllers;                     // Object that manage buffs for skill on cast
     private List<BuffController> onHitControllers;                      // Object that manage buffs for skills on hit
     private float startFlightTime;                                      // Start time of the skill executing (i.e. in-flight)
-
-    /*
-     * Function that initializes & links Skill to the NPC that is using it
-     */
-    public void Init(BattleNPC owner, GameObject[] targets)
+    private bool firstCast;                                             // Tracks the first time DoSkill is called (for onCast buffs)
+    
+    public void SkillAwake()
     {
-        skillOwner = owner;
+        SkillSpriteRenderer          = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
+        SkillSpriteRenderer.enabled  = false;
+        HitStatus                    = Skill_Hit_Status.NotApplicable;
+        SkillState                   = Skill_State.SkillStart;
+        startFlightTime              = 0;
+        firstCast                    = false;       
+
         onCastControllers = new List<BuffController>();
-        onHitControllers = new List<BuffController>();
-        BuffController[] temp = GetComponentsInChildren<BuffController>();
-        foreach (BuffController b in temp)
+        onHitControllers  = new List<BuffController>();
+        foreach (BuffController b in GetComponentsInChildren<BuffController>())
         {
             if (b.BuffIsOnSkillCast())
             {
@@ -106,18 +255,22 @@ public abstract class Skill : MonoBehaviour
             }
         }
 
-        myTargets = new List<GameObject>(targets);
-        myNPCTargets = new BattleNPC[myTargets.Count];
-        int i = 0;
-        foreach (GameObject g in myTargets)
-        {
-            myNPCTargets[i] = GameGlobals.GetBattleNPC(g);
-            i++;
-        }
+        this.enabled = false;
+    }
 
-        mySpriteRenderer = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
-        myHitStatus = Skill_Hit_Status.NotApplicable;
-        startFlightTime = 0;
+    void Awake()
+    {
+        SkillAwake();
+    }
+
+    /*
+     * Function that initializes & links Skill to the NPC that is using it
+     */
+    public void Init(BattleNPC owner, BattleNPC[] targets)
+    {
+        SkillOwner      = owner;
+        SkillNPCTargets = targets;  
+        SkillSpriteRenderer.enabled = true;      
     }
 
     /*
@@ -139,7 +292,7 @@ public abstract class Skill : MonoBehaviour
      * OnSkillHit must call AdvanceSkillState() if your skill cares about collisions
      * @param: col -- object that skill hit, do not assume it's the intended target
      */
-    public abstract void OnSkillHit(GameObject col);
+    public abstract void OnSkillHit(BattleNPC col);
 
     /*
      * Script that represents what actions to do after the skill hits
@@ -159,24 +312,25 @@ public abstract class Skill : MonoBehaviour
     public abstract bool WillHitMultipleTargets();
 
     /*
+     * Code to execute when skill is finished (either from finishing naturally, or the NPC dies)
+     */
+    public abstract void OnDeath();
+
+    /*
      * Main skill loop used by every skill
      */
     public void Skill_Update()
     {
-        switch (myState)
+        switch (SkillState)
         {
             case Skill_State.SkillStart:
-                StartSkill();
+                this.enabled = true;
+                StartSkill();                
                 AdvanceSkillState();
                 break;
-            case Skill_State.ChargingAttack:
-                break;
             case Skill_State.DoSkill:
-                if (chargeable && (startFlightTime == 0))
-                {
-                    startFlightTime = Time.time;
-                }
-                ApplyOnCastBuffs();
+                _applyoncastbuffs();
+                _trackchargeable();                      
                 DoSkill();
                 break;
             case Skill_State.Cooldown:
@@ -184,28 +338,51 @@ public abstract class Skill : MonoBehaviour
                 break;
             case Skill_State.SkillComplete:
                 OnDeath();
-                skillOwner.AdvanceBattleState();
+                SkillOwner.AdvanceBattleState();
                 break;
             default:
                 break;
         }
+    }   
+
+    /*
+     * Track if we we already applied OnHit buffs, if we haven't already applied, apply them
+     */
+    private void _applyoncastbuffs()
+    {
+        if (!firstCast)
+        {
+            firstCast = true;
+            foreach (BuffController b in onCastControllers)
+            {
+                b.RegisterSkillOwner(this, SkillElementTypes);
+                b.OnSkillCast(SkillNPCTargets);
+            }
+        }        
     }
 
-    private void ApplyOnCastBuffs()
+    /*
+     * Track when skill starts for when skill gains power while in-flight
+     */
+    private void _trackchargeable()
     {
-        foreach (BuffController b in onCastControllers)
+        if (chargeable && (startFlightTime == 0))
         {
-            b.SetBuffOwner(this);
-            b.OnSkillCast(myNPCTargets);
+            startFlightTime = Time.time;
         }
     }
 
-    public void ApplyOnHitBuffs(GameObject target, int dmg)
+    /*
+     * When a skill hits it's target, apply OnHit buffs
+     * @param: target - if (de)buffs are to be applied to target, this is the target
+     * @param: dmg    - the damage the skill did, if the buff relies on dmg dealt
+     */
+    public void ApplyOnHitBuffs(BattleNPC target, int dmg)
     {
         foreach (BuffController b in onHitControllers)
         {
-            b.SetBuffOwner(this);
-            b.OnSkillHit(GameGlobals.GetBattleNPC(target), dmg);
+            b.RegisterSkillOwner(this, SkillElementTypes);
+            b.OnSkillHit(target, dmg);
         }
     }
 
@@ -219,101 +396,31 @@ public abstract class Skill : MonoBehaviour
     {
         if (!isAlive && (dmg > 0))
         {
-            myHitStatus = Skill_Hit_Status.Kill;
+            HitStatus = Skill_Hit_Status.Kill;
             return;
         }
         if (dmg == (CRIT_MULTI * (numberHits * skillBasePower)))
         {
-            myHitStatus = Skill_Hit_Status.Crit;
+            HitStatus = Skill_Hit_Status.Crit;
             return;
         }
         if (dmg == (numberHits * skillBasePower))
         {
-            myHitStatus = Skill_Hit_Status.Hit;
+            HitStatus = Skill_Hit_Status.Hit;
             return;
         }
-        myHitStatus = Skill_Hit_Status.Miss;
+        HitStatus = Skill_Hit_Status.Miss;
     }
-
-    /*
-     * Used by VotingManager to report how well this skill performed
-     */
-    public Skill_Hit_Status GetSkillHitStatus()
-    {
-        return myHitStatus;
-    }
-
-    /*
-     * Allows inherited skills access to BattleNPC that used this skill
-     */
-    public BattleNPC GetSkillOwner()
-    {
-        return skillOwner;
-    }
-
-    /*
-     * Allows inherited skills access to target(s) for the skill
-     */
-    public List<GameObject> GetMyTargets()
-    {
-        return myTargets;
-    }
-
-    /*
-     *  Allows skills to turn the skill sprite on/off (not projectiles)
-     */
-    public void ToggleSpriteRender()
-    {
-        mySpriteRenderer.enabled = !mySpriteRenderer.enabled;
-    }
-
+        
     /*
      * Allows skills to flip the skill sprite along the X axis
      */
     public void ToggleSpriteFlipX()
     {
-        mySpriteRenderer.flipX = !mySpriteRenderer.flipX;
+        SkillSpriteRenderer.flipX = !SkillSpriteRenderer.flipX;
     }
 
-    /*
-     *  Get the time until next skill use (in seconds)
-     */
-    public float GetSkillReadiness()
-    {
-        return skillReadiness;
-    }
-
-    public bool GetTargetsAllies()
-    {
-        return targetsAllies;
-    }
-
-    /*
-     * Get if the skill is able to be intercepted, but
-     * we only care about interceptions while we execute the skill
-     */
-    public bool IsBlockable()
-    {
-        return (myState == Skill_State.DoSkill) ? blockable : false;
-    }
-
-    /*
-     * Get the bool that determines if skill/projectiles follow moving targets
-     */
-    public bool IsHoming()
-    {
-        return homing;
-    }
-
-    /*
-     * Get the elemental damage type (for purposes of determining crit/no damage)
-     */
-    public Battle_Element_Type[] GetDamageType()
-    {
-        return damageTypes;
-    }
-
-    private int GetSkillBasePowerWithWiggle()
+    private int _skilldamagewiggle()
     {
         return skillBasePower;
     }
@@ -323,38 +430,10 @@ public abstract class Skill : MonoBehaviour
      */
     public int GetSkillDamage()
     {
-        return (chargeable) ? 
-            Convert.ToInt32(Math.Floor((Time.time - startFlightTime)/chargeIncrementTime)*chargePowerGain + GetSkillBasePowerWithWiggle()) 
-            : GetSkillBasePowerWithWiggle();
-    }
-
-    /*
-     * Number of hits a skill does, cannot be 0
-     */
-    public int GetNumberHits()
-    {
-        return numberHits;
-    }
-       
-    /*
-     * Function that is called when the skill is being deleted, or the user dies mid-skill
-     */
-    public void OnDeath()
-    {
-        mySpriteRenderer.enabled = false;
-        skillOwner.GetNPCRigidBody2D().velocity = Vector2.zero;
-        skillOwner.ResetRotation();
+        return _skilldamagewiggle() 
+            + ((Chargeable) ? Convert.ToInt32(Math.Floor((Time.time - startFlightTime)/ChargeIncrementTime)*ChargePowerGain) : 0);
     }
     
-    /*
-     * Function is given to StartCoroutine() to wait for charging time (in sec)
-     */
-    private IEnumerator SkillChargeTime()
-    {
-        yield return new WaitForSeconds(channelTime);
-        myState++;
-    }
- 
     /*
      * Changes the state of the skill, state is not circular, 
      * all states are reached once, except ChargingAttack which depends on chargeable
@@ -362,25 +441,13 @@ public abstract class Skill : MonoBehaviour
     public void AdvanceSkillState()
     {
         //Do not allow advancing on Skill state while we are charging attack or Skill is complete
-        if((channelable && (myState == Skill_State.ChargingAttack)) || (myState == Skill_State.SkillComplete))
+        if((SkillState == Skill_State.SkillComplete))
         {
             return;
-        }
-
-        //If we aren't a charge skill skip that step (i.e. advance two steps from StartSkill)
-        if (!channelable && (myState == Skill_State.SkillStart))
-        {
-            myState++;
-        }
+        }      
 
         //Advance our skill state one step
-        myState++;
-        
-        // If we are a charge skill, start the wait for the attack to charge
-        if (channelable && (myState == Skill_State.ChargingAttack))
-        {
-            StartCoroutine(SkillChargeTime());
-        }
+        SkillState++;      
     }
 
     /*
@@ -412,66 +479,4 @@ public abstract class Skill : MonoBehaviour
             System.Array.Resize(ref damageTypes, MAXIMUM_ELEMENTAL_SKILL_TYPES);
         }
     }
-
-#if UNITY_EDITOR
-    public bool IsChargeable()
-    {
-        return chargeable;
-    }
-
-    public void SetIsChargeable(bool i)
-    {
-        chargeable = i;
-    }
-
-    public float GetChargeIncrementTime()
-    {
-        return chargeIncrementTime;
-    }
-
-    public void SetChargeIncrementTime(float s)
-    {
-        chargeIncrementTime = GameGlobals.StepByPointOne(s);
-    }
-
-    public void SetSkillReadiness(float s)
-    {
-        skillReadiness = GameGlobals.StepByPointFive(s);
-    }
-
-    public void SetChannelable(bool b)
-    {
-        channelable = b;
-    }
-
-    public bool IsChannelable()
-    {
-        return channelable;
-    }
-
-    public void SetSkillMaxLevel(int lvl)
-    {
-        skillMaxLevel = lvl;
-    }
-
-    public int GetSkillMaxLevel()
-    {
-        return skillMaxLevel;
-    }
-
-    public float GetSkillDropChance()
-    {
-        return skillDropChance;
-    }
-
-    public void SetSkillDropChance(float per)
-    {
-        skillDropChance = GameGlobals.StepByPointOne(per);
-    }
-
-    public void SetNumberHits(int n)
-    {
-        numberHits = n;
-    }
-#endif
 }

@@ -16,7 +16,7 @@ public class ResistanceBuff : Buff
 
     public override void ApplyBuff(float amount)
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
+        BattleNPC actor = Controller.BuffActor;
         float ret = actor.SetResistance(element, (actor.GetResistance(element) - oldResistAmount) + amount);
         if (ret != 0)
         {
@@ -26,7 +26,7 @@ public class ResistanceBuff : Buff
 
     public override void DeApplyBuff()
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
+        BattleNPC actor = Controller.BuffActor;
         actor.SetResistance(element, (actor.GetResistance(element) - oldResistAmount));        
     }
 

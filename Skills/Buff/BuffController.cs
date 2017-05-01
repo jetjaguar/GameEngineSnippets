@@ -5,22 +5,29 @@ using UnityEngine;
 
 public class BuffController : MonoBehaviour
 {
-    private static Vector3 BUFF_SPRITE_LOCATION = Vector3.zero;
-
-    public enum BuffCastTime
+    private static Vector3 BUFF_SPRITE_LOCATION   = Vector3.zero;
+    public const float MINIMUM_BUFF_DEGRADE_PERC  = 0.0f;            // Minimum delta change in buff strength over intervals
+    public const float MAXIMUM_BUFF_DEGRADE_PERC  = 100.0f;          // Maximum delta change in buff strength over intervals
+    public const float MINIMUM_BUFF_DURATION_SEC  = 0.5f;            // Minimum seconds buff can last
+    public const float MAXIMUM_BUFF_DURATION_SEC  = 5.0f;            // Maximum seconds buff can last
+    public const float MINIMUM_BUFF_DEGRADE_INTER = 0.1f;            // Minimum buff degrade interval
+    public const float MAXIMUM_BUFF_DEGRADE_INTER = 1.0f;            // Maximum buff degrade interval   
+    public const int MINIMUM_BUFF_SKILL_DUR       = 1;               // Minimum skill uses or damage buff duration 
+    public const int MAXIMUM_BUFF_SKILL_DUR       = 5;               // Maximum skill uses or damage buff duration
+    
+    public enum Buff_Cast_Time
     {
         OnSkillCast,            // Give the buff to the target when the skill is started 
         OnSkillHit              // Give the buff to the target when the skill connects
     }
 
-    public enum BuffTarget
+    public enum Buff_Target
     {
         Self,                   // Buff the caster of the skill
-        AlliedTarget,           // Buff the allied target of the skill
-        EnemyTarget,            // Buff the enemy target of the skill
+        OtherTarget,            // Buff either allied or enemytarget
     }
 
-    public enum BuffDuration
+    public enum Buff_Duration
     {
         Seconds,                // Buff lasts X seconds
         SkillUse,               // Buff lasts X Skill uses
@@ -28,21 +35,104 @@ public class BuffController : MonoBehaviour
         Permanent,              // Buff lasts for rest of battle/ has no duration
     }
 
-    [SerializeField] BuffCastTime timeCast;           // When the buff is cast during the activation of the skill
-    [SerializeField] BuffTarget targetOfBuff;         // Who the buff targets
-    [SerializeField] BuffDuration typeOfDuration;     // How to interpet the duration
-    [SerializeField] float duration;                  // Duration of the buff, is different depending on which duration type
+    [SerializeField] Buff_Cast_Time timeCast;         // When the buff is cast during the activation of the skill
+    [SerializeField] Buff_Target targetOfBuff;        // Who the buff targets
+    [SerializeField] Buff_Duration typeOfDuration;    // How to interpet the duration
+    [SerializeField] float duration;                  // Duration of the buff, type = seconds
+    [SerializeField] int durationSkill;               // Duration of the buff, type = skills used or affected by
     [SerializeField] float degradePercent;            // Buff effect degrades by this % after mutliple durations (i.e. every 1 sec loose 20% power)
     [SerializeField] float degradeSecInterval;        // How often to poll buff effect (+health, degrade percent) in seconds (e.g. every .2 sec heal 10 health)
     [SerializeField] GameObject numberFloat;          // Custom damage float object to use for damage/healing tick
 
-    private Skill buffOwner;                          // Skill this buff is attached to
+    // Properties for Inspector elements
+#if UNITY_EDITOR
+    public Buff_Cast_Time TimeCast
+    {
+        get
+        {
+            return timeCast;
+        }
+        set
+        {
+            timeCast = value;
+        }
+    }
+    public Buff_Target TargetOfBuff
+    {
+        get
+        {
+            return targetOfBuff;
+        }
+        set
+        {
+            targetOfBuff = value;
+        }
+    }
+    public Buff_Duration TypeOfDuration
+    {
+        get
+        {
+            return typeOfDuration;
+        }
+    }
+    public float BuffDurationSeconds
+    {
+        get
+        {
+            return duration;
+        }
+        set
+        {
+            duration = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointFive(value), MINIMUM_BUFF_DURATION_SEC, MAXIMUM_BUFF_DURATION_SEC);
+        }
+    }
+    public int BuffDurationSkills
+    {
+        get
+        {
+            return durationSkill;
+        }
+        set
+        {
+            durationSkill = Convert.ToInt32(GameGlobals.SnapToMinOrMax(value, MINIMUM_BUFF_SKILL_DUR, MAXIMUM_BUFF_SKILL_DUR));
+        }
+    }
+    public float DegradePercentage
+    {
+        get
+        {
+            return degradePercent;
+        }
+        set
+        {
+            degradePercent = GameGlobals.SnapToMinOrMax(GameGlobals.StepByOne(value), MINIMUM_BUFF_DEGRADE_PERC, MAXIMUM_BUFF_DEGRADE_PERC);
+        }
+    }                
+    public float DegradeIntervalInSeconds
+    {
+        get
+        {
+            return degradeSecInterval;
+        }
+        set
+        {
+            degradeSecInterval = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointOne(value), MINIMUM_BUFF_DEGRADE_INTER, MAXIMUM_BUFF_DEGRADE_INTER);
+        }
+    }
+#endif
+
+    // Properties accesses by other classes
+    public Skill BuffOwner { get; private set; }         // Skill this buff is attached to
+    public BattleNPC BuffActor { get; private set; }     // BattleNPC buff is acting on
+    public DamageFloat CustomFloat { get; private set; } // Custom float for this buff/debuff
+
+    // Not accessed by other classes
     private Buff[] managedBuffs;                      // BattleNPC attributes modified
-    private BattleNPC buffActor;                      // BattleNPC that the buff is being applied to
     private SpriteRenderer mySpriteRenderer;          // Our Sprite Renderer
-    private DamageFloat customFloat;                  // Custom float for this buff/debuff
     private int degradeCount;                         // Number of degrade intervals that've passed
     private int completedBuffs;                       // Buffs completed
+    private bool endBuffEarly;                        // When buffs are cleansed
+    private Battle_Element_Type[] eleTypes;           // Types of the skill that owns this 
 
     public void Init()
     {
@@ -51,10 +141,11 @@ public class BuffController : MonoBehaviour
         completedBuffs               = 0;
         mySpriteRenderer.enabled     = false;
         this.transform.localPosition = BUFF_SPRITE_LOCATION;
-
+        endBuffEarly                 = false;
+        
         if (numberFloat != null)
         {
-            customFloat = numberFloat.GetComponent<DamageFloat>();
+            CustomFloat = GameGlobals.AttachCheckComponent<DamageFloat>(numberFloat);
         }
 
         managedBuffs = GetComponents<Buff>();
@@ -64,104 +155,90 @@ public class BuffController : MonoBehaviour
         }
         foreach (Buff b in managedBuffs)
         {
-            b.RegisterBuffController(this);
+            b.Controller = this;
         }        
     }
 
     void Awake()
     {
         Init();
-    }
-
-    public bool HasCustomDamageFloat()
-    {
-        return (numberFloat != null);
-    }
-
-    public DamageFloat GetDamageFloat()
-    {
-        return customFloat;
-    }
-
-    public void SetBuffOwner(Skill s)
-    {
-        buffOwner = s;
-    }
-
-    public int GetBuffDurationInt()
-    {
-        return Convert.ToInt32(duration);
     }   
-
-    public BattleNPC GetBuffActor()
-    {
-        return buffActor;
-    }
-    
+        
     public bool BuffIsOnSkillCast()
     {
-        return (timeCast == BuffCastTime.OnSkillCast);
+        return (timeCast == Buff_Cast_Time.OnSkillCast);
     }
 
-    public bool BuffIsOnSkillHit()
+    public void RegisterSkillOwner(Skill s, Battle_Element_Type[] t)
     {
-        return (timeCast == BuffCastTime.OnSkillHit);
+        BuffOwner = s;
+        eleTypes  = t;
     }
-
-    public bool BuffIsAlliedTarget()
-    {
-        return (targetOfBuff == BuffTarget.AlliedTarget);
-    }
-
-    public bool BuffIsEnemyTarget()
-    {
-        return (targetOfBuff == BuffTarget.EnemyTarget);
-    }
-
-    private IEnumerator TrackBuff(Buff b)
+    
+    private IEnumerator _trackBuff(Buff b)
     {
         b.ApplyBuff(b.GetBuffAmount());
 
-        if (typeOfDuration == BuffDuration.Seconds)
+        if (typeOfDuration == Buff_Duration.Seconds)
         {
             float waitTime = 0.0f;
             float secInterval = (degradeSecInterval < duration) ? degradeSecInterval : duration;
-            while (waitTime < duration)
+            while ((waitTime < duration) && !endBuffEarly)
             {
-                yield return new WaitForSeconds(secInterval);
-                waitTime += secInterval;
-                ApplyBuffDegrade(b);
+                yield return new WaitForSeconds(0.1f);
+                waitTime += 0.1f;
+                if ((waitTime % secInterval) == 0)
+                {
+                    _applyBuffDegrade(b);
+                }                
             }
         }
         else // Buff.BuffDuration.Skill{Use,Damage}
         {
-            int current = (typeOfDuration == BuffDuration.SkillDamage)
-                ? buffActor.GetSkillsHitByThisBattle() : buffActor.GetSkillsCompletedThisBattle();
+            int current = (typeOfDuration == Buff_Duration.SkillDamage)
+                ? BuffActor.SkillsHitByThisBattle : BuffActor.SkillsDoneThisBattle;
             int prevCount = current;
-            int target = current + GetBuffDurationInt();
-            while (current < target)
+            int target = current + durationSkill;
+            while ((current < target) && !endBuffEarly)
             {
                 yield return new WaitForSeconds(0.1f);
-                current = (typeOfDuration == BuffDuration.SkillDamage)
-                    ? buffActor.GetSkillsHitByThisBattle() : buffActor.GetSkillsCompletedThisBattle();
+                current = (typeOfDuration == Buff_Duration.SkillDamage)
+                    ? BuffActor.SkillsHitByThisBattle : BuffActor.SkillsDoneThisBattle;
                 if (current != prevCount)
                 {
                     prevCount = current;
-                    ApplyBuffDegrade(b);
+                    _applyBuffDegrade(b);
                 }
             }
         }
         // De-apply Buff
-        completedBuffs++;
         b.DeApplyBuff();
+        completedBuffs++;
+    }
+
+    public void CleanseThisBuff()
+    {
+        endBuffEarly = true;
+    }
+
+    public bool CheckBuffElementTypes(Battle_Element_Type t)
+    {
+        foreach (Battle_Element_Type b in eleTypes)
+        {
+            if (b == t)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void StartBuffs(BattleNPC n)
     {
-        buffActor = n;
+        BuffActor = n;
         foreach (Buff b in managedBuffs)
         {
-            if (typeOfDuration == BuffDuration.Permanent)
+            if (typeOfDuration == Buff_Duration.Permanent)
             {
                 b.ApplyBuff(b.GetBuffAmount());
                 completedBuffs++;
@@ -169,19 +246,19 @@ public class BuffController : MonoBehaviour
             else
             {
                 mySpriteRenderer.enabled = true;
-                StartCoroutine(TrackBuff(b));
+                StartCoroutine(_trackBuff(b));
             }
         }
     }
 
-    private void RegisterBuff(BattleNPC n)
+    private BuffController _copyThisController(BattleNPC n)
     {
-        BuffController temp = Instantiate(this.gameObject, Vector3.zero, Quaternion.identity, 
-                                          n.transform.parent.transform).GetComponent<BuffController>();
-        temp.StartBuffs(n);               
+        BuffController temp = GameGlobals.AttachCheckComponent<BuffController>(Instantiate(this.gameObject, n.transform.parent.transform));
+        temp.RegisterSkillOwner(this.BuffOwner, this.eleTypes);
+        return temp;
     }
-
-    private void ApplyBuffDegrade(Buff b)
+        
+    private void _applyBuffDegrade(Buff b)
     {
         b.ApplyBuff(b.GetBuffAmount() * (1 - (degradeCount * degradePercent)));
         degradeCount++;
@@ -191,13 +268,13 @@ public class BuffController : MonoBehaviour
     {
         switch(targetOfBuff)
         {
-            case BuffTarget.Self:
-                RegisterBuff(buffOwner.GetSkillOwner());
+            case Buff_Target.Self:
+                BuffOwner.SkillOwner.RegisterBuff(_copyThisController(BuffOwner.SkillOwner));
                 break;
             default:    //AlliedTarget/EnemyTarget
                 foreach (BattleNPC n in targets)
                 {
-                    RegisterBuff(n);
+                    n.RegisterBuff(_copyThisController(n));
                 }
                 break;            
         }           
@@ -207,11 +284,11 @@ public class BuffController : MonoBehaviour
     {
         switch (targetOfBuff)
         {
-            case BuffTarget.Self:
-                RegisterBuff(buffOwner.GetSkillOwner());
+            case Buff_Target.Self:
+                BuffOwner.SkillOwner.RegisterBuff(_copyThisController(BuffOwner.SkillOwner));
                 break;
             default: //AlliedTarget/EnemyTarget
-                RegisterBuff(target);
+                target.RegisterBuff(_copyThisController(target));
                 break;
         }
     }
@@ -221,49 +298,8 @@ public class BuffController : MonoBehaviour
         if (completedBuffs == managedBuffs.Length)
         {
             mySpriteRenderer.enabled = false;
+            BuffActor.DeRegisterBuff(this);
             Destroy(this.gameObject);
         }
-    }
-
-#if UNITY_EDITOR
-    public BuffDuration GetDurationType()
-    {
-        return typeOfDuration;
-    }
-
-    public float GetDegradePercentage()
-    {
-        return degradePercent;
-    }
-
-    public void SetDegradePercentage(float d)
-    {
-        degradePercent = d;
-    }
-
-    public float GetBuffDuration()
-    {
-        return duration;
-    }
-
-    public void SetBuffDuration(float d)
-    {
-        duration = GameGlobals.StepByPointFive(d);
-    }
-
-    public void SetBuffDuration(int d, bool enabled)
-    {
-        duration = (enabled) ? d : duration;
-    }
-
-    public void SetBuffDegradeInterval(float d)
-    {
-        degradeSecInterval = GameGlobals.StepByPointOne(d);
-    }
-
-    public float GetBuffDegradeInterval()
-    {
-        return degradeSecInterval;
-    }
-#endif
+    }    
 }

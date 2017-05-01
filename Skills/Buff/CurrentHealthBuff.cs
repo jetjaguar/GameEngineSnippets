@@ -9,12 +9,7 @@ public class CurrentHealthBuff : Buff
 
     public override void ApplyBuff(float amount)
     {
-        BuffController bControl = GetBuffController();
-        if (bControl.HasCustomDamageFloat())
-        {
-            bControl.GetBuffActor().AddCurrentHealth(Convert.ToInt32(amount), canEffectDead, bControl.GetDamageFloat());
-        }
-        
+        Controller.BuffActor.AddCurrentHealth(Convert.ToInt32(amount), canEffectDead, Controller.CustomFloat);               
     }    
 
     public override void DeApplyBuff()

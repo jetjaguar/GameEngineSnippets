@@ -14,13 +14,15 @@ public class MaxHealthBuff : Buff
     
     public override void ApplyBuff(float amount)
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        maxHealthDiff = actor.SetMaximumHealth((actor.GetMaximumHealth() - maxHealthDiff) + Convert.ToInt32(amount));        
+        BattleNPC actor = Controller.BuffActor;
+        int oldMaxHP = actor.NPCMaxHealth;
+        actor.NPCMaxHealth = (oldMaxHP - maxHealthDiff) + Convert.ToInt32(amount);
+        maxHealthDiff = oldMaxHP - actor.NPCMaxHealth;        
     }
     
     public override void DeApplyBuff()
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        actor.SetMaximumHealth(actor.GetMaximumHealth() - maxHealthDiff);
+        BattleNPC actor = Controller.BuffActor;
+        actor.NPCMaxHealth = actor.NPCMaxHealth - maxHealthDiff;
     }    
 }

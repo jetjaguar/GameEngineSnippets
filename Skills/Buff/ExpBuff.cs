@@ -13,14 +13,16 @@ public class ExpBuff : Buff
 
     public override void ApplyBuff(float amount)
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        expBuffDiff = actor.SetExperienceMultiplier((actor.GetExperienceMultiplier() - expBuffDiff) + amount);        
+        BattleNPC actor = Controller.BuffActor;
+        float oldExp = actor.ExpMultiplier;
+        actor.ExpMultiplier = (actor.ExpMultiplier - expBuffDiff) + amount;
+        expBuffDiff = oldExp - actor.ExpMultiplier;      
     }
 
     public override void DeApplyBuff()
     {
-        BattleNPC actor = GetBuffController().GetBuffActor();
-        actor.SetExperienceMultiplier(actor.GetExperienceMultiplier() - expBuffDiff);
+        BattleNPC actor = Controller.BuffActor;
+        actor.ExpMultiplier = (actor.ExpMultiplier - expBuffDiff);
     }
 
 #if UNITY_EDITOR

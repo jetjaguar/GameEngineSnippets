@@ -19,30 +19,45 @@ public class RangedSkill : Skill
     [SerializeField] private float skillProjectileSpeed;        // Speed of the projectile
     [SerializeField] private bool instant;                      // The skill casts instantly (only buffs, lasers)
     [SerializeField] private GameObject projectile;             // The Projectile that is used when this skill is lobbed
-
-
+    
     private GameObject myProj;                                  // Instance of the projectile used to do damage
     
-    /*
-     * Used by Projectile class to set speed of projectile 
-     * (projectile's values are configurable by RangedSkill to allow reuse of projectile types)
-     */
-    public float GetProjectileSpeed()
+    // Properties for Inspector variables
+    public float SkillProjectileSpeed
     {
-        return skillProjectileSpeed;
+        get
+        {
+            return skillProjectileSpeed;
+        }
+#if UNITY_EDITOR
+        set
+        {
+            skillProjectileSpeed = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointFive(value), MINIMUM_PROJ_SPEED, MAXIMUM_PROJ_SPEED);
+        }
+#endif
     }
-       
-    /*
-     * Allows inherited children access to projectile variable
-     */
-    public GameObject GetProjectile()
+    public bool Instant
     {
-        return projectile;
+        get
+        {
+            return instant;
+        }
+        set
+        {
+            instant = value;
+        }
     }
-    
-    public bool IsInstant()
+    public GameObject Projectile
     {
-        return instant;
+        get
+        {
+            return projectile;
+        }
+    }
+ 
+    void Awake()
+    {
+        SkillAwake();
     }   
 
     /*
@@ -50,10 +65,10 @@ public class RangedSkill : Skill
      */
 	public override void StartSkill()
     {
-        GetSkillOwner().SetNPCAnimatorTrigger(BattleGlobals.ANIMATE_NPC_ATTACK);
+        SkillOwner.NPCAnimator.SetTrigger(BattleGlobals.ANIMATE_NPC_ATTACK);
 
         Vector3 proj_spawn_v3 = PROJ_SPAWN_OFFSET;
-        if (GetSkillOwner().CompareTag(BattleGlobals.TAG_FOR_ENEMIES))
+        if (SkillOwner.CompareTag(BattleGlobals.TAG_FOR_ENEMIES))
         {
             ToggleSpriteFlipX();
             proj_spawn_v3 = -1 * proj_spawn_v3;
@@ -61,8 +76,8 @@ public class RangedSkill : Skill
 
         if (!instant && (projectile != null))
         {
-            myProj = Instantiate(projectile, GetSkillOwner().transform.position + proj_spawn_v3, Quaternion.identity, this.transform);
-            myProj.GetComponent<Projectile>().SetMainTarget(GetMyTargets()[RANGED_SKILL_PRIMARY_TARGET]);
+            myProj = Instantiate(projectile, SkillOwner.transform.position + proj_spawn_v3, Quaternion.identity, this.transform);
+            myProj.GetComponent<Projectile>().SetMainTarget(SkillNPCTargets[RANGED_SKILL_PRIMARY_TARGET]);
         }
     }
 
@@ -74,7 +89,7 @@ public class RangedSkill : Skill
         if (instant)
         {
             SetSkillHitStatus(0, true);
-            ToggleSpriteRender();
+            SkillSpriteRenderer.enabled = false;
             AdvanceSkillState();
         } 
         // else if (!instant)
@@ -84,22 +99,21 @@ public class RangedSkill : Skill
     /*
      * Advance the state of the skill when called into DoCooldown()
      * At the end, destroy the projectile
-     * @param: col -- gameObject we hit, if col == null we missed
+     * @param: col -- BattleNPC we hit, if col == null we missed
      */
-    public override void OnSkillHit(GameObject col)
+    public override void OnSkillHit(BattleNPC col)
     {
         if (col != null)
         {
-            BattleNPC targetNPC = GameGlobals.GetBattleNPC(col);
-            int damage = targetNPC.TakeDamage(this);
-            SetSkillHitStatus(damage, targetNPC.IsAlive());
+            int damage = col.TakeDamage(this);
+            SetSkillHitStatus(damage, col.IsAlive());
             ApplyOnHitBuffs(col, damage);
         }
         else
         {
             SetSkillHitStatus(0, true);
         }
-        ToggleSpriteRender();
+        SkillSpriteRenderer.enabled = false;
         Destroy(myProj);
         AdvanceSkillState();                
     }
@@ -109,7 +123,7 @@ public class RangedSkill : Skill
      */
     public override void DoCooldown()
     {
-        StartCoroutine(GetSkillOwner().SkillWait(this));
+        SkillOwner.StartSkillCooldown(this);
         AdvanceSkillState();               
     }
 
@@ -118,7 +132,7 @@ public class RangedSkill : Skill
      */
     public override void OnTriggerEnter2D(Collider2D collision)
     {
-        OnSkillHit(collision.gameObject);                        
+        OnSkillHit(GameGlobals.GetBattleNPC(collision.gameObject));                        
     }
 
     /*
@@ -129,16 +143,8 @@ public class RangedSkill : Skill
         return false;
     }
 
-#if UNITY_EDITOR
-    public void SetProjectileSpeed(float p)
+    public override void OnDeath()
     {
-        skillProjectileSpeed = GameGlobals.StepByPointFive(p);
+        Awake();
     }
-
-    public void SetInstant(bool i)
-    {
-        instant = i;
-    }
-#endif
-
 }

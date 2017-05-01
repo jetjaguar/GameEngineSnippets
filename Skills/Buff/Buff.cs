@@ -11,18 +11,8 @@ public abstract class Buff : MonoBehaviour
 {
     [SerializeField] float buffAmount;                // How much the attribute is buffed
 
-    private BuffController bController;
-
-    public void RegisterBuffController(BuffController b)
-    {
-        bController = b;
-    }
-
-    public BuffController GetBuffController()
-    {
-        return bController;
-    }
-
+    public BuffController Controller { get; set; }
+    
     public float GetBuffAmount()
     {
         return buffAmount;

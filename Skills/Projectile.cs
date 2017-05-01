@@ -8,37 +8,36 @@ using UnityEngine;
  */
 public class Projectile : MonoBehaviour
 {
-
     private RangedSkill myParentSkill;              // The skill that created this projectile
 
     private Rigidbody2D myRigid2d;                  // The Unity component used to movement/physics
     private Vector3 projDirection;                  // Direction the projectile moves (right to left)
-    private GameObject myMainTarget;                // The target of our projectile, for use of determing when object done moving
+    private BattleNPC myMainTarget;                 // The target of our projectile, for use of determing when object done moving
     private SpriteRenderer mySpriteRenderer;        // The Unity component tied to graphics
     
     // Use this for initialization
     void Awake()
     {
-        myRigid2d           = GameGlobals.AttachCheckComponent<Rigidbody2D>(gameObject);
-        myParentSkill       = GetComponentInParent<RangedSkill>();
-        mySpriteRenderer    = GetComponent<SpriteRenderer>();
-        this.gameObject.tag = (myParentSkill.GetSkillOwner().CompareTag(BattleGlobals.TAG_FOR_HEROES))
-                              ? BattleGlobals.TAG_FOR_HERO_PROJ : BattleGlobals.TAG_FOR_ENEMY_PROJ;
+        myRigid2d        = GameGlobals.AttachCheckComponent<Rigidbody2D>(this.gameObject);
+        myParentSkill    = GameGlobals.AttachCheckComponentParent<RangedSkill>(this.gameObject);
+        mySpriteRenderer = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
+        this.tag         = (BattleGlobals.IsHeroTeamTag(myParentSkill.SkillOwner.tag)) ? BattleGlobals.TAG_FOR_HERO_PROJ : BattleGlobals.TAG_FOR_ENEMY_PROJ;
+        this.name        = GameGlobals.TrimClone(this.name) + "(" + myParentSkill.SkillOwner + ")";
         // If the object is homing, this does not matter
-        projDirection       = (this.gameObject.CompareTag(BattleGlobals.TAG_FOR_HERO_PROJ)) ? Vector2.left : Vector2.right;
-        myMainTarget        = null;
+        projDirection    = (this.gameObject.CompareTag(BattleGlobals.TAG_FOR_HERO_PROJ)) ? Vector2.left : Vector2.right;
+        myMainTarget     = null;
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (myParentSkill.IsHoming())
+        if (myParentSkill.Homing)
         {
-            Skill.HomingMovement(myRigid2d, myMainTarget.transform.position, myParentSkill.GetProjectileSpeed());            
+            Skill.HomingMovement(myRigid2d, myMainTarget.transform.position, myParentSkill.SkillProjectileSpeed);            
         }
         else
         {
-            Skill.NonHomingMovement(myRigid2d, projDirection * myParentSkill.GetProjectileSpeed());
+            Skill.NonHomingMovement(myRigid2d, projDirection * myParentSkill.SkillProjectileSpeed);
             
             // When we are out of sight, we missed
             if (!mySpriteRenderer.isVisible)
@@ -52,30 +51,34 @@ public class Projectile : MonoBehaviour
     /* This is called separately because in multi-target spells it's better the skill set the target,
      * than the projectile query the skill for a target
      */
-    public void SetMainTarget(GameObject g)
+    public void SetMainTarget(BattleNPC target)
     {
-        myMainTarget = g;
-        myRigid2d.transform.rotation = BattleGlobals.LookAt(this.gameObject, GameGlobals.GetBattleNPC(g).GetAimTarget());
+        myMainTarget                 = target;
+        myRigid2d.transform.rotation = BattleGlobals.LookAt(this.gameObject, target.GetAimTarget(), this.tag);        
     }
     
     // This handles the logic for the projectile "connecting" with it's target
     public void OnTriggerEnter2D(Collider2D collision)
     {
-        if (!myParentSkill.IsBlockable())
+        BattleNPC colNPC = GameGlobals.GetBattleNPC(collision.gameObject);
+        if (colNPC != null)
         {
-            if((myMainTarget != null) && collision.transform.gameObject.Equals(myMainTarget.gameObject))
+            if (!myParentSkill.Blockable)
             {
-                myParentSkill.OnTriggerEnter2D(collision);
-                Destroy(this.gameObject);
-            }            
-        }
-        else
-        {
-            if (collision.gameObject.tag.Equals(BattleGlobals.GetHostileTag(BattleGlobals.GetFriendlyToProjTag(gameObject.tag))))
-            {
-                myParentSkill.OnTriggerEnter2D(collision);
-                Destroy(this.gameObject);
+                if ((myMainTarget != null) && (colNPC == myMainTarget))
+                {
+                    myParentSkill.OnTriggerEnter2D(collision);
+                    Destroy(this.gameObject);
+                }
             }
-        }       
+            else
+            {
+                if (colNPC.IsAlive() && BattleGlobals.IsHostileToProjTag(this.tag, colNPC.tag))
+                {
+                    myParentSkill.OnTriggerEnter2D(collision);
+                    Destroy(this.gameObject);
+                }
+            }
+        }
     }   
 }
