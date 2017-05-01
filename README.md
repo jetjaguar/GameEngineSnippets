@@ -28,6 +28,12 @@ Player
   Buff[n]
 ```
 
+When I reference Inspector elements/variables with the [SerializeField] tag
+
+![Editor](http://imgur.com/3SrXA40.png)
+
+This Unity feature allows developers to configure multiple copies with multiple options, and Unity will save those different configurations for use in your game engine.
+
 To help contextualize what this engine code runs, please refer to:
 
 http://imgur.com/a/tkxC3
