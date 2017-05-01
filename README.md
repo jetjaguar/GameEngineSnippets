@@ -9,30 +9,23 @@ Skills/Buff/BuffController.cs
 
 The most basic explanation of this repository in the context of the game engine, is my Objects in Unity are structured such that
 
+```
 Player
-
   Skill[0]
-  
   ...
-  
   Skill[3]
-  
-and
 
 Skill[n]
-
   BuffController
-  
   Buff[n]
-  
-And after a skill applies a buff to a player
+```  
+And after a skill applies a buff to a player Skill[n] -hits-> Player
 
+```
 Player
-
   BuffControlller - Copy
-  
   Buff[n]
-
+```
 
 To help contextualize what this engine code runs, please refer to:
 
