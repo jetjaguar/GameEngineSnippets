@@ -61,6 +61,29 @@ Player
   Buff[0 - n]
 ```
 
+And to explain the rough code execution flow for most this code example
+
+```
+Player
+  Skill
+    StartSkill()
+      n = 0;
+      Byte[0].ResetByte()   // Reset byte to unexecuted state
+      Byte[0].EnableByte()  // Turn on visual parts of the byte & execution
+    Update()
+      Byte[n].DoByte()      // Execute the main loop
+
+//then when Byte[n].DoByte() hits it's end state
+  Skill.NextByte()
+    Byte[0].CleanUpByte()   // Set byte to dormant state
+    n++;
+    if (n.IsValid())
+      Byte[1].ResetByte()
+      Byte[1].EnableByte()
+    else
+      Skill.EndSkill()
+```
+
 When I reference Inspector elements/variables with the [SerializeField] tag, I'm talking about the similarly named (and ordered) fields contained in the Script's configuration fields.
 
 This Unity feature allows developers to configure multiple copies with multiple options, and Unity will save those different configurations for use in your game engine.
