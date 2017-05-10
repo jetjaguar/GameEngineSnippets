@@ -2,6 +2,8 @@
 
 This is a repository for sharing a portion of my engine code with other people.
 
+![Editor](http://i.imgur.com/PugOXns.png)
+
 These snippets represent the "Actions/Verbs" of the Game Engine. Hero 1 "Fireballed" Enemy 1, Hero 3 "Healed" Hero 2, etc...
 My "Skills" are broken up into smaller actions/verbs, representing individual steps in completing a skill. Attacking someone with a sword consists of a few steps.
 
@@ -53,9 +55,7 @@ Player
   Buff[0 - n]
 ```
 
-When I reference Inspector elements/variables with the [SerializeField] tag
-
-![Editor](http://i.imgur.com/PugOXns.png)
+When I reference Inspector elements/variables with the [SerializeField] tag, I'm talking about the similarly named (and ordered) fields contained in the Script's configuration fields.
 
 This Unity feature allows developers to configure multiple copies with multiple options, and Unity will save those different configurations for use in your game engine.
 
