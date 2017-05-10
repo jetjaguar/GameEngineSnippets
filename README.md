@@ -5,32 +5,43 @@ This is a repository for sharing a portion of my engine code with other people.
 Files that contain the most "structure"
 
 Skills/Skill.cs
-
-Skills/Buff/BuffController.cs
+Skills/Byte/SkillByte.cs
+Skills/Byte/PlusSkillByte.cs
+Skills/Byte/DamagingSkillByte.cs
 
 The most basic explanation of this repository in the context of the game engine, is my Objects in Unity are structured such that
 
 ```
 Player
   Skill[0]
-  ...
+  Skill[1]
+  Skill[2]
   Skill[3]
 
-Skill[n]
-  BuffController
-  Buff[n]
+Skill
+  Byte[0]
+  ...
+  Byte[n]
+
+Byte
+  BuffController[0]
+    Buff[0]
+    ...
+    Buff[n]
+  BuffController[1]
+  BuffController[2]  
 ```  
 And after a skill applies a buff to a player Skill[n] -hits-> Player
 
 ```
 Player
   BuffControlller - Copy
-  Buff[n]
+  Buff[0 - n]
 ```
 
 When I reference Inspector elements/variables with the [SerializeField] tag
 
-![Editor](http://imgur.com/3SrXA40.png)
+![Editor](http://i.imgur.com/PugOXns.png)
 
 This Unity feature allows developers to configure multiple copies with multiple options, and Unity will save those different configurations for use in your game engine.
 
