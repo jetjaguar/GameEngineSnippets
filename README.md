@@ -2,6 +2,17 @@
 
 This is a repository for sharing a portion of my engine code with other people.
 
+These snippets represent the "Actions/Verbs" of the Game Engine. Hero 1 "Fireballed" Enemy 1, Hero 3 "Healed" Hero 2, etc...
+My "Skills" are broken up into smaller actions/verbs, representing individual steps in completing a skill. Attacking someone with a sword consists of a few steps.
+
+Step 1) Walk over to them
+
+Step 2) Swing Sword
+
+Step 3) Return to starting position
+
+When applicable, I've condensed highly coupled actions into one action, but in the future it may be required that these actions be split up. An example of this is while "Swording" someone takes 3 steps, I have condensed Steps 1 & 2 into one byte.
+
 Files that contain the most "structure"
 
 Skills/Skill.cs
@@ -34,7 +45,7 @@ Byte
   BuffController[1]
   BuffController[2]  
 ```  
-And after a skill applies a buff to a player Skill[n] -hits-> Player
+And after a skillbyte applies a buff to a player, SkillByte[n] -hits-> Player
 
 ```
 Player
