@@ -21,16 +21,15 @@ Step 2) Swing Sword - Melee Attack Byte
 
 Step 3) Return to starting position - Move to Start Puck Byte
 ```
-Files that contain the most "structure"
+Here is a rough inheritance chart, More Base files contain the most pure "structure"
 ```
-Skills/Skill.cs
+Skill.cs (has multiple SkillBytes)
 
-Skills/Byte/SkillByte.cs
-
-Skills/Byte/PlusSkillByte.cs
-
-Skills/Byte/DamagingSkillByte.cs
-```
+SkillByte.cs       --> PlusSkillByte.cs          --> DamagingSkillByte.cs      --> ProjectileAttackByte.cs
+PrayByte.cs            MoveToStartPuckByte.cs         MeleeAttackByte.cs            MeteorAttackByte.cs
+WaitByte.cs                                           InstantAttackByte.cs
+                                                      BeamAttackByte.cs
+```       
 The most basic explanation of this repository in the context of the game engine, is my Objects in Unity are structured such that
 
 ```
