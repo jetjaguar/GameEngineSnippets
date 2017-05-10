@@ -61,7 +61,7 @@ Player
   Buff[0 - n]
 ```
 
-And to explain the rough code execution flow for most this code example
+And to explain the rough code execution flow for most of this code example
 
 ```
 Player
