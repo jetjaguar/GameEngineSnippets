@@ -5,8 +5,11 @@ This is a repository for sharing a portion of my engine code with other people.
 Files that contain the most "structure"
 
 Skills/Skill.cs
+
 Skills/Byte/SkillByte.cs
+
 Skills/Byte/PlusSkillByte.cs
+
 Skills/Byte/DamagingSkillByte.cs
 
 The most basic explanation of this repository in the context of the game engine, is my Objects in Unity are structured such that
