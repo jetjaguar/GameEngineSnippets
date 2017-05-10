@@ -4,7 +4,7 @@ This is a repository for sharing a portion of my engine code with other people.
 
 ![Editor](http://i.imgur.com/PugOXns.png)
 
-These snippets represent the "Actions/Verbs" of the Game Engine. Hero 1 "Fireballed" Enemy 1, Hero 3 "Healed" Hero 2, etc...
+These code snippets represent the "Actions/Verbs" of the Game Engine. Hero 1 "Fireballed" Enemy 1, Hero 3 "Healed" Hero 2, etc...
 My "Skills" are broken up into smaller actions/verbs, representing individual steps in completing a skill. Attacking someone with a sword consists of a few steps.
 
 Step 1) Walk over to them
@@ -13,7 +13,13 @@ Step 2) Swing Sword
 
 Step 3) Return to starting position
 
-When applicable, I've condensed highly coupled actions into one action, but in the future it may be required that these actions be split up. An example of this is while "Swording" someone takes 3 steps, I have condensed Steps 1 & 2 into one byte.
+When applicable, I've condensed highly coupled actions into one action, but in the future it may be required that these actions be split up. An example of this is while "Swording" someone takes 3 steps, I have condensed Steps 1 & 2 into one byte, so from above
+
+Step 1) Walk over to them - Melee Attack Byte
+
+Step 2) Swing Sword - Melee Attack Byte
+
+Step 3) Return to starting position - Move to Start Puck Byte
 
 Files that contain the most "structure"
 
