@@ -14,19 +14,19 @@ public class MoveSpeedBuff : Buff
     public override void ApplyBuff(float amount)
     {
         BattleNPC actor = Controller.BuffActor;
-        float oldMS = actor.NPCMoveSpeed;
-        actor.NPCMoveSpeed = (actor.NPCMoveSpeed - moveSpeedBuffDiff) + amount;
-        moveSpeedBuffDiff = (oldMS - actor.NPCMoveSpeed);        
+        float oldMS = actor.NPCMoveSpeedMultiplier;
+        actor.NPCMoveSpeedMultiplier = (actor.NPCMoveSpeedMultiplier - moveSpeedBuffDiff) + amount;
+        moveSpeedBuffDiff = (oldMS - actor.NPCMoveSpeedMultiplier);        
     }
 
     public override void DeApplyBuff()
     {
         BattleNPC actor    = Controller.BuffActor;
-        actor.NPCMoveSpeed = actor.NPCMoveSpeed - moveSpeedBuffDiff;
+        actor.NPCMoveSpeedMultiplier = actor.NPCMoveSpeedMultiplier - moveSpeedBuffDiff;
     }
 
 #if UNITY_EDITOR
-    public new void SetBuffAmount(float a)
+    public override void SetBuffAmount(float a)
     {
         base.SetBuffAmount(GameGlobals.StepByPointOne(a));
     }

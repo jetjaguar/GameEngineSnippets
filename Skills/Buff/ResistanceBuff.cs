@@ -6,7 +6,7 @@ public class ResistanceBuff : Buff
 {
     public const float MINIMUM_RESIST_BUFF_EDITOR = 0.0f;
 
-    [SerializeField] private Battle_Element_Type element;
+    [SerializeField] private ElementType element;
     private float oldResistAmount;
     
     void Awake()
@@ -31,7 +31,7 @@ public class ResistanceBuff : Buff
     }
 
 #if UNITY_EDITOR
-    public new void SetBuffAmount(float a)
+    public override void SetBuffAmount(float a)
     {
         base.SetBuffAmount(GameGlobals.StepByPointOne(a));
     }

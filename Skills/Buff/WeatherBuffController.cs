@@ -4,19 +4,19 @@ using UnityEngine;
 
 public class WeatherBuffController : BuffController
 {
-    [SerializeField] private Battle_Element_Type[] weatherElementTypes = new Battle_Element_Type[Skill.MAXIMUM_ELEMENTAL_SKILL_TYPES];
+    [SerializeField] private ElementType[] weatherElementTypes = new ElementType[Skill.MAXIMUM_SKILL_TYPES];
 
-    void Awake()
+    protected override void Awake()
     {
-        Init();
-        this.RegisterSkillOwner(null, weatherElementTypes);
+        base.Awake();
+        BuffAffinity = weatherElementTypes;
     }
 
     void OnValidate()
     {
-        if (weatherElementTypes.Length != Skill.MAXIMUM_ELEMENTAL_SKILL_TYPES)
+        if (weatherElementTypes.Length != Skill.MAXIMUM_SKILL_TYPES)
         {
-            System.Array.Resize(ref weatherElementTypes, Skill.MAXIMUM_ELEMENTAL_SKILL_TYPES);
+            System.Array.Resize(ref weatherElementTypes, Skill.MAXIMUM_SKILL_TYPES);
         }
     }
 }

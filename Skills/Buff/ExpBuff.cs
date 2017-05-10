@@ -26,7 +26,7 @@ public class ExpBuff : Buff
     }
 
 #if UNITY_EDITOR
-    public new void SetBuffAmount(float s)
+    public override void SetBuffAmount(float s)
     {
         base.SetBuffAmount(GameGlobals.StepByPointZeroFive(s));
     }

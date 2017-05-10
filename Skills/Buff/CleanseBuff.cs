@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class CleanseBuff : Buff
 {
-    [SerializeField] private Battle_Element_Type element;
+    [SerializeField] private ElementType element;
 
     public override void ApplyBuff(float amount)
     {

@@ -23,7 +23,7 @@ public class StunDebuff : Buff
 #if UNITY_EDITOR
         set
         {
-            stunLength = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointFive(value), MINIMUM_STUN_LENGTH, MAXIMUM_STUN_LENGTH);
+            stunLength = GameGlobals.WithinRange(GameGlobals.StepByPointFive(value), MINIMUM_STUN_LENGTH, MAXIMUM_STUN_LENGTH);
         }
 #endif
     }

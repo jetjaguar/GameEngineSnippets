@@ -11,19 +11,21 @@ public abstract class Buff : MonoBehaviour
 {
     [SerializeField] float buffAmount;                // How much the attribute is buffed
 
-    public BuffController Controller { get; set; }
-    
-    public float GetBuffAmount()
+    public float BuffAmount
     {
-        return buffAmount;
+        get
+        {
+            return buffAmount;
+        }
     }
-    
+    public BuffController Controller { get; set; }
+        
     public abstract void ApplyBuff(float amount);
 
     public abstract void DeApplyBuff();
 
 #if UNITY_EDITOR
-    public void SetBuffAmount(float a)
+    public virtual void SetBuffAmount(float a)
     {
         buffAmount = a;
     }

@@ -83,7 +83,7 @@ public class BuffController : MonoBehaviour
         }
         set
         {
-            duration = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointFive(value), MINIMUM_BUFF_DURATION_SEC, MAXIMUM_BUFF_DURATION_SEC);
+            duration = GameGlobals.WithinRange(GameGlobals.StepByPointFive(value), MINIMUM_BUFF_DURATION_SEC, MAXIMUM_BUFF_DURATION_SEC);
         }
     }
     public int BuffDurationSkills
@@ -94,7 +94,7 @@ public class BuffController : MonoBehaviour
         }
         set
         {
-            durationSkill = Convert.ToInt32(GameGlobals.SnapToMinOrMax(value, MINIMUM_BUFF_SKILL_DUR, MAXIMUM_BUFF_SKILL_DUR));
+            durationSkill = Convert.ToInt32(GameGlobals.WithinRange(value, MINIMUM_BUFF_SKILL_DUR, MAXIMUM_BUFF_SKILL_DUR));
         }
     }
     public float DegradePercentage
@@ -105,7 +105,7 @@ public class BuffController : MonoBehaviour
         }
         set
         {
-            degradePercent = GameGlobals.SnapToMinOrMax(GameGlobals.StepByOne(value), MINIMUM_BUFF_DEGRADE_PERC, MAXIMUM_BUFF_DEGRADE_PERC);
+            degradePercent = GameGlobals.WithinRange(GameGlobals.StepByOne(value), MINIMUM_BUFF_DEGRADE_PERC, MAXIMUM_BUFF_DEGRADE_PERC);
         }
     }                
     public float DegradeIntervalInSeconds
@@ -116,15 +116,15 @@ public class BuffController : MonoBehaviour
         }
         set
         {
-            degradeSecInterval = GameGlobals.SnapToMinOrMax(GameGlobals.StepByPointOne(value), MINIMUM_BUFF_DEGRADE_INTER, MAXIMUM_BUFF_DEGRADE_INTER);
+            degradeSecInterval = GameGlobals.WithinRange(GameGlobals.StepByPointOne(value), MINIMUM_BUFF_DEGRADE_INTER, MAXIMUM_BUFF_DEGRADE_INTER);
         }
     }
 #endif
 
     // Properties accesses by other classes
-    public Skill BuffOwner { get; private set; }         // Skill this buff is attached to
-    public BattleNPC BuffActor { get; private set; }     // BattleNPC buff is acting on
-    public DamageFloat CustomFloat { get; private set; } // Custom float for this buff/debuff
+    public BattleNPC BuffActor { get; private set; }         // BattleNPC buff is acting on
+    public DamageFloat CustomFloat { get; private set; }     // Custom float for this buff/debuff
+    public ElementType[] BuffAffinity { get; set; }           // Affinity types of Skill this was attached to
 
     // Not accessed by other classes
     private Buff[] managedBuffs;                      // BattleNPC attributes modified
@@ -132,16 +132,15 @@ public class BuffController : MonoBehaviour
     private int degradeCount;                         // Number of degrade intervals that've passed
     private int completedBuffs;                       // Buffs completed
     private bool endBuffEarly;                        // When buffs are cleansed
-    private Battle_Element_Type[] eleTypes;           // Types of the skill that owns this 
-
-    public void Init()
+    
+    protected virtual void Awake()
     {
-        mySpriteRenderer             = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
-        degradeCount                 = 1;
-        completedBuffs               = 0;
+        mySpriteRenderer = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
+        degradeCount     = 1;
+        completedBuffs   = 0;
         mySpriteRenderer.enabled     = false;
         this.transform.localPosition = BUFF_SPRITE_LOCATION;
-        endBuffEarly                 = false;
+        endBuffEarly     = false;
         
         if (numberFloat != null)
         {
@@ -156,28 +155,17 @@ public class BuffController : MonoBehaviour
         foreach (Buff b in managedBuffs)
         {
             b.Controller = this;
-        }        
-    }
-
-    void Awake()
-    {
-        Init();
+        }
     }   
         
     public bool BuffIsOnSkillCast()
     {
         return (timeCast == Buff_Cast_Time.OnSkillCast);
     }
-
-    public void RegisterSkillOwner(Skill s, Battle_Element_Type[] t)
-    {
-        BuffOwner = s;
-        eleTypes  = t;
-    }
-    
+            
     private IEnumerator _trackBuff(Buff b)
     {
-        b.ApplyBuff(b.GetBuffAmount());
+        b.ApplyBuff(b.BuffAmount);
 
         if (typeOfDuration == Buff_Duration.Seconds)
         {
@@ -221,9 +209,9 @@ public class BuffController : MonoBehaviour
         endBuffEarly = true;
     }
 
-    public bool CheckBuffElementTypes(Battle_Element_Type t)
+    public bool CheckBuffElementTypes(ElementType t)
     {
-        foreach (Battle_Element_Type b in eleTypes)
+        foreach (ElementType b in BuffAffinity)
         {
             if (b == t)
             {
@@ -240,7 +228,7 @@ public class BuffController : MonoBehaviour
         {
             if (typeOfDuration == Buff_Duration.Permanent)
             {
-                b.ApplyBuff(b.GetBuffAmount());
+                b.ApplyBuff(b.BuffAmount);
                 completedBuffs++;
             }
             else
@@ -254,49 +242,33 @@ public class BuffController : MonoBehaviour
     private BuffController _copyThisController(BattleNPC n)
     {
         BuffController temp = GameGlobals.AttachCheckComponent<BuffController>(Instantiate(this.gameObject, n.transform.parent.transform));
-        temp.RegisterSkillOwner(this.BuffOwner, this.eleTypes);
+        temp.BuffAffinity   = this.BuffAffinity;
         return temp;
     }
         
     private void _applyBuffDegrade(Buff b)
     {
-        b.ApplyBuff(b.GetBuffAmount() * (1 - (degradeCount * degradePercent)));
+        b.ApplyBuff(b.BuffAmount * (1 - (degradeCount * degradePercent)));
         degradeCount++;
     }
 
     public void OnSkillCast(BattleNPC[] targets)
     {
-        switch(targetOfBuff)
+        foreach (BattleNPC n in targets)
         {
-            case Buff_Target.Self:
-                BuffOwner.SkillOwner.RegisterBuff(_copyThisController(BuffOwner.SkillOwner));
-                break;
-            default:    //AlliedTarget/EnemyTarget
-                foreach (BattleNPC n in targets)
-                {
-                    n.RegisterBuff(_copyThisController(n));
-                }
-                break;            
-        }           
+            n.RegisterBuff(_copyThisController(n));
+        }        
     }
 
     public void OnSkillHit(BattleNPC target, int dmg)
     {
-        switch (targetOfBuff)
-        {
-            case Buff_Target.Self:
-                BuffOwner.SkillOwner.RegisterBuff(_copyThisController(BuffOwner.SkillOwner));
-                break;
-            default: //AlliedTarget/EnemyTarget
-                target.RegisterBuff(_copyThisController(target));
-                break;
-        }
+        target.RegisterBuff(_copyThisController(target));        
     }
 
     void LateUpdate()
     {
         if (completedBuffs == managedBuffs.Length)
-        {
+        {            
             mySpriteRenderer.enabled = false;
             BuffActor.DeRegisterBuff(this);
             Destroy(this.gameObject);
