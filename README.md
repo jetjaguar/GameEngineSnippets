@@ -40,24 +40,24 @@ Player
   Skill[3]
 
 Skill
-  Byte[0]
+  SkillByte[0]
   ...
-  Byte[n]
+  SkillByte[n]
 
-Byte
-  BuffController[0]
-    Buff[0]
+SkillByte
+  BuffConfiguration[0]
+    BuffByte[0]
     ...
-    Buff[n]
-  BuffController[1]
-  BuffController[2]  
+    BuffByte[n]
+  BuffConfiguration[1]
+    ...
 ```  
 And after a skillbyte applies a buff to a player, SkillByte[n] -hits-> Player
 
 ```
 Player
-  BuffControlller - Copy
-  Buff[0 - n]
+  BuffActive
+    BuffByte[0 - n]
 ```
 
 And to explain the rough code execution flow for most of this code example
@@ -67,10 +67,10 @@ Player
   Skill
     StartSkill()
       n = 0;
-      Byte[0].ResetByte()   // Reset byte to unexecuted state
-      Byte[0].EnableByte()  // Turn on visual parts of the byte & execution
+      SkillByte[0].ResetByte()   // Reset byte to unexecuted state
+      SkillByte[0].EnableByte()  // Turn on visual parts of the byte & execution
     Update()
-      Byte[n].DoByte()      // Execute the main loop
+      SkillByte[n].DoByte()      // Execute the main loop
 
 //then when Byte[n].DoByte() hits it's end state
   Skill.NextByte()
