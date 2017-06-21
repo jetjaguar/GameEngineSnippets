@@ -38,13 +38,32 @@ public class Skill : MonoBehaviour
     /*
      *  Variables configurable by means of Unity Editor
      */
-    [SerializeField] private ElementType[] affinity;    // A Skill can have multiple affinities         
-    [SerializeField] private float skillCooldown;       // Time in seconds until next attack may be used after this attack
-    [SerializeField] private int caretakerCost;         // Mana cost of the skill when Caretaker chooses to use it
-    [SerializeField] private int skillMaxLevel;         // Maximum level of the skill
-    [SerializeField] private float skillDropChance;     // Chance that the skill is dropped when an enemy is killed and has this skill
-    [SerializeField] private int repeatTimes;           // Repeat the skillbytes underneath X times    
+    // A Skill can have multiple affinities  
+    [SerializeField] private ElementType[] affinity;
+    // Time in seconds until next attack may be used after this attack
+    [SerializeField] private float skillCooldown;
+    // Mana cost of the skill when Caretaker chooses to use it
+    [SerializeField] private int caretakerCost;
+    // Maximum level of the skill
+    [SerializeField] private int skillMaxLevel;
+    // Chance that the skill is dropped when an enemy is killed and has this skill
+    [SerializeField] private float skillDropChance;
+    // Repeat the skillbytes underneath X times    
+    [SerializeField] private int repeatTimes;
 
+    // Bytes attached to the same GameObject as this skill
+    private SkillByte[] m_ManagedBytes;
+    // Current repeat index count
+    private int m_RepeatIndex;
+    // Current Byte being executed
+    private int m_ByteIndex;
+    // Current Level of the skill
+    private int m_SkillLevel;
+    // Current Experience gained of the skill (out of skilExptoLevel)
+    private int m_SkillExp;
+    // Amount of Experience required until next level of the skill
+    private int m_ExpTillNextLevel;
+    
     // Properties of Inspector fields
     public ElementType[] AffinityTypes
     {
@@ -62,7 +81,7 @@ public class Skill : MonoBehaviour
 #if UNITY_EDITOR
         set
         {
-            skillCooldown = GameGlobals.WithinRange(GameGlobals.StepByPointFive(value), MINIMUM_SKILL_COOLDOWN, MAXIMUM_SKILL_COOLDOWN);
+            skillCooldown = GameGlobals.ValueWithinRange(GameGlobals.StepByPointFive(value), MINIMUM_SKILL_COOLDOWN, MAXIMUM_SKILL_COOLDOWN);
         }
 #endif
     }
@@ -86,7 +105,7 @@ public class Skill : MonoBehaviour
 #if UNITY_EDITOR
         set
         {
-            skillMaxLevel = Convert.ToInt32(GameGlobals.WithinRange(value, MINIMUM_SKILL_LEVEL, MAXIMUM_SKILL_LEVEL));
+            skillMaxLevel = GameGlobals.ValueWithinRange(value, MINIMUM_SKILL_LEVEL, MAXIMUM_SKILL_LEVEL);
         }
 #endif
     }
@@ -99,7 +118,7 @@ public class Skill : MonoBehaviour
 #if UNITY_EDITOR
         set
         {
-            skillDropChance = GameGlobals.WithinRange(GameGlobals.StepByPointOne(value), MINIMUM_SKILL_DROP_CHANCE, MAXIMUM_SKILL_DROP_CHANCE);
+            skillDropChance = GameGlobals.ValueWithinRange(GameGlobals.StepByPointOne(value), MINIMUM_SKILL_DROP_CHANCE, MAXIMUM_SKILL_DROP_CHANCE);
         }
 #endif
     }
@@ -112,24 +131,20 @@ public class Skill : MonoBehaviour
 #if UNITY_EDITOR
         set
         {
-            repeatTimes = (int)GameGlobals.WithinRange(value, MINIMUM_REPEAT_TIMES, MAXIMUM_REPEAT_TIMES);
+            repeatTimes = GameGlobals.ValueWithinRange(value, MINIMUM_REPEAT_TIMES, MAXIMUM_REPEAT_TIMES);
         }
 #endif
     }
 
-    // Properties for variables accessed by other classes
-    public HitState HitStatus { get; set; }                          // State of how the skill performed
-    public BattleNPC SkillOwner { get; private set; }                // BattleNPC that is using this skill
-    public SpriteRenderer SkillSpriteRenderer { get; private set; }  // Icon that appears on NPC (different from projectile)
-
-    // Variables not accessible outside of class
-    private SkillByte[] managedBytes;                                 // Bytes attached to the same GameObject as this skill
-    private int repeatIndex;                                          // Current repeat index count
-    private int byteIndex;                                            // Current Byte being executed
-    private int skillLevel;                                           // Current Level of the skill
-    private int skillExp;                                             // Current Experience gained of the skill (out of skilExptoLevel)
-    private int skillExptoLevel;                                      // Amount of Experience required until next level of the skill
-
+    // State of how the skill performed
+    public HitState HitStatus { get; set; }
+    // BattleNPC that is using this skill
+    public BattleNPC SkillOwner { get; private set; }
+    // Icon that appears on NPC (different from projectile)
+    public SpriteRenderer SkillSpriteRenderer { get; private set; }  
+    // Entire damage done by the skill, can be used for scaling damage
+    public int CumulativeDamage { get; set; }
+    
     /*
      * Get SpriteRenderer, BattleNPC that owns this skill, & Bytes attached to skill
      * Disable this skill, until it is used
@@ -138,7 +153,7 @@ public class Skill : MonoBehaviour
     {
         SkillSpriteRenderer = GameGlobals.AttachCheckComponent<SpriteRenderer>(this.gameObject);
         SkillOwner          = GameGlobals.AttachCheckComponentParent<BattleNPC>(this.gameObject);
-        managedBytes        = GetComponents<SkillByte>();
+        m_ManagedBytes      = GetComponents<SkillByte>();
         ResetSkill();
     }
 
@@ -148,22 +163,21 @@ public class Skill : MonoBehaviour
     protected virtual void ResetSkill()
     {
         SkillSpriteRenderer.enabled = false;
-        HitStatus    = HitState.NotApplicable;
-        byteIndex    = 0;
-        repeatIndex  = 0;
-        this.enabled = false;
+        this.enabled                = false;
     }
 
     /*
      * Gets/sets NPCTargets for this byte & turns on the byte
      * @param: i - index of the byte in managedBytes
      */
-    private void _prepareByte(int i)
+    private void _targetAndEnableByte(int index)
     {
-        if(ValidByteIndex(i))
+        if(CheckValidByteIndex(index))
         {
-            SkillOwner.NPCAIManager.TargetSkillByte(managedBytes[i]);            
-            managedBytes[i].EnableByte();
+            Target[] tempTargetList       = null;
+            SkillOwner.NPCAIManager.TargetSkillByte(m_ManagedBytes[index], out tempTargetList);
+            m_ManagedBytes[index].SetTarget(tempTargetList);
+            m_ManagedBytes[index].enabled = true;
         }        
     }
 
@@ -172,47 +186,62 @@ public class Skill : MonoBehaviour
      */
     public void StartSkill()
     {
-        this.enabled = true;
+        this.enabled                = true;
         SkillSpriteRenderer.enabled = true;
-        _prepareByte(byteIndex);
+        CumulativeDamage            = 0;
+        HitStatus                   = HitState.NotApplicable;
+        m_ByteIndex                 = 0;
+        m_RepeatIndex               = 0;
+
+        _targetAndEnableByte(m_ByteIndex);
+    }
+
+    public bool CurrentByteTypeCompare(Type compareType)
+    {
+        return (CheckValidByteIndex(m_ByteIndex)) ? (m_ManagedBytes[m_ByteIndex].GetType() == compareType) : false;
+    }
+
+    public SkillByte GetCurrentByte()
+    {
+        return (CheckValidByteIndex(m_ByteIndex)) ? m_ManagedBytes[m_ByteIndex] : null;
     }
 
     /*
      * Used by CaretakerWheel to target skills
      * and by Skill to check if skill should end
      */
-    public bool ValidByteIndex(int i)
+    public bool CheckValidByteIndex(int index)
     {
-        return (i < managedBytes.Length);
+        return (index < m_ManagedBytes.Length);
     }   
 
     /*
      * Called by SkillBytes to advance skill execution to the next byte,
      * or if last byte was called, to end the skill and start the cooldown
      */
-    public void NextByte()
+    public void AdvanceToNextByte()
     {
-        managedBytes[byteIndex].CleanUpByte();
-        byteIndex++;
+        m_ManagedBytes[m_ByteIndex].enabled = false;
+        m_ByteIndex++;
         // Roll over back to 0 if we need to repeat
-        if(!ValidByteIndex(byteIndex))
+        if(!CheckValidByteIndex(m_ByteIndex))
         {
-            if(++repeatIndex < RepeatTimes)
+            if(++m_RepeatIndex < RepeatTimes)
             {
-                byteIndex = 0;
+                m_ByteIndex = 0;
             }
         }
 
         // If we didn't roll over, then we're done
-        if(!ValidByteIndex(byteIndex))
+        if(!CheckValidByteIndex(m_ByteIndex))
         {
             SkillOwner.StartSkillCooldown(this);
-            SkillOwner.AdvanceBattleState();
+            SkillOwner.AdvanceNPCBattleState();
             ResetSkill();
         }
         else
         {   
-            _prepareByte(byteIndex);               
+            _targetAndEnableByte(m_ByteIndex);               
         } 
     }
 
@@ -220,10 +249,10 @@ public class Skill : MonoBehaviour
      * Call SkillByte.DoByte() for our currently indexed byte
      */
     void Update()
-    {        
-        if(ValidByteIndex(byteIndex))
+    {
+        if(CheckValidByteIndex(m_ByteIndex) && (SkillOwner.StunLock == 0))
         {
-            managedBytes[byteIndex].DoByte();
+            m_ManagedBytes[m_ByteIndex].DoByte();
         }        
     }
     
@@ -233,11 +262,16 @@ public class Skill : MonoBehaviour
      */
     public virtual void CleanUpSkill()
     {
-        if (ValidByteIndex(byteIndex))
+        if (CheckValidByteIndex(m_ByteIndex))
         {
-            managedBytes[byteIndex].CleanUpByte();
+            m_ManagedBytes[m_ByteIndex].enabled = false;
         }
         ResetSkill();
+    }
+
+    public void RegisterCumulative(int damage)
+    {
+        CumulativeDamage += (damage > 0) ? damage : 0;
     }
     
     /*
@@ -245,9 +279,9 @@ public class Skill : MonoBehaviour
      * @param: i - the index number of managedByte we want
      * @returns: int - the number of targets the byte effects
      */
-    public int TargetCountStep(int i)
+    public int TargetCountStep(int index)
     {
-        return managedBytes[i].GetTargetCount();        
+        return m_ManagedBytes[index].GetTargetCount();        
     }
 
     /*
@@ -255,9 +289,9 @@ public class Skill : MonoBehaviour
      * @param: i - the index number of managedByte we want
      * @returns: int - the type of target the byte effects.
      */
-    public SkillByte.TargetType TargetTypeStep(int i)
+    public SkillByte.TargetType TargetTypeStep(int index)
     {
-        return managedBytes[i].GetTargetType();
+        return m_ManagedBytes[index].GetTargetType();
     }    
     
     /*
@@ -265,9 +299,9 @@ public class Skill : MonoBehaviour
      * HitState is higher priority
      * @param: HitState - possibly new HitState reported by a SkillByte
      */  
-    public void UpdateHitState(HitState s)
+    public void UpdateHitState(HitState newState)
     {
-        HitStatus = (HitStatus < s) ? s : HitStatus; 
+        HitStatus = (HitStatus < newState) ? newState : HitStatus; 
     }
            
     /*
